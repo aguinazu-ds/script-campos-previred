@@ -100,6 +100,50 @@ ProcesadorPrevired.exe
 - Los archivos originales NO se modifican
 - Validación estricta: se detiene si falta algún RUT
 
+## 📖 Instrucciones Completas para Windows
+
+### REQUISITOS:
+- Windows 10/11
+- NO requiere Python instalado
+
+### PREPARACIÓN:
+1. Descargue el paquete `ProcesadorPrevired_v1.0.zip` desde GitHub Actions
+2. Extraiga en su computadora
+3. Coloque sus archivos .txt o .TXT en la carpeta `archivos105espacios`
+4. Verifique que el archivo `jornadas\jornadasTrabajadores.csv` contenga todos los RUTs
+
+### FORMATO DEL ARCHIVO DE JORNADAS:
+```csv
+rut;jornada
+12345678-9;1
+98765432-1;2
+```
+
+**Valores de jornada:**
+- `1` = Jornada completa
+- `2` = Jornada parcial
+
+### USO:
+1. Ejecute `ProcesadorPrevired.exe`
+2. El programa procesará automáticamente todos los archivos
+3. Los resultados aparecerán en la carpeta `archivos_modificados`
+
+### IMPORTANTE:
+- **TODOS** los RUTs en los archivos de datos deben estar en `jornadasTrabajadores.csv`
+- Si falta algún RUT, el programa se detendrá con un mensaje de error
+- Los archivos originales **NUNCA** se modifican
+
+### ESTRUCTURA DE CARPETAS REQUERIDA:
+```
+ProcesadorPrevired_v1.0/
+├── ProcesadorPrevired.exe           # Ejecutable principal
+├── archivos105espacios/             # Coloque aquí sus archivos .txt
+├── jornadas/                        # Archivo de jornadas
+│   └── jornadasTrabajadores.csv
+├── archivos_modificados/            # Se crea automáticamente
+└── README.md                        # Este archivo
+```
+
 ## ⚙️ Características
 
 ### Procesamiento de Campos

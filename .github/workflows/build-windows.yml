@@ -73,75 +73,8 @@ jobs:
           Copy-Item "jornadas/jornadasTrabajadores.csv" "ProcesadorPrevired_v1.0/jornadas/"
         }
         
-        # Crear archivo de instrucciones
-        $instrucciones = @"
-PROCESADOR DE ARCHIVOS PREVIRED - INSTRUCCIONES DE USO
-=====================================================
-
-REQUISITOS:
-- Windows 10/11
-- NO requiere Python instalado
-
-PREPARACIÓN:
-1. Coloque sus archivos .txt o .TXT en la carpeta "archivos105espacios"
-2. Verifique que el archivo "jornadas\jornadasTrabajadores.csv" contenga
-   todos los RUTs de sus trabajadores con su jornada correspondiente
-
-FORMATO DEL ARCHIVO DE JORNADAS:
-- Archivo: jornadas\jornadasTrabajadores.csv
-- Formato: rut;jornada
-- Ejemplo:
-  rut;jornada
-  12345678-9;1
-  98765432-1;2
-
-VALORES DE JORNADA:
-- 1 = Jornada completa
-- 2 = Jornada parcial
-
-USO:
-1. Ejecute ProcesadorPrevired.exe
-2. El programa procesará automáticamente todos los archivos
-3. Los resultados aparecerán en la carpeta "archivos_modificados"
-
-IMPORTANTE:
-- TODOS los RUTs en los archivos de datos deben estar en jornadasTrabajadores.csv
-- Si falta algún RUT, el programa se detendrá con un mensaje de error
-- Los archivos originales NUNCA se modifican
-
-ESTRUCTURA DE CARPETAS REQUERIDA:
-ProcesadorPrevired_v1.0/
-├── ProcesadorPrevired.exe           (ejecutable principal)
-├── archivos105espacios/             (coloque aquí sus archivos .txt)
-├── jornadas/                        (archivo de jornadas)
-│   └── jornadasTrabajadores.csv
-├── archivos_modificados/            (se crea automáticamente)
-└── INSTRUCCIONES.txt                (este archivo)
-
-NOTAS TÉCNICAS:
-- Compilado con PyInstaller para máxima compatibilidad
-- Ejecutable standalone (no requiere instalación)
-- Compatible con Windows 10/11 (64-bit)
-
-=====================================================
-Procesador compilado con PyInstaller
-Versión 1.0 - 2024
-"@
-        $instrucciones | Out-File -FilePath "ProcesadorPrevired_v1.0/INSTRUCCIONES.txt" -Encoding UTF8
-        
-        # Crear archivo de ejemplo
-        $ejemplo = @"
-Coloque aquí sus archivos .txt o .TXT
-
-Los archivos deben tener el formato de ancho fijo
-de Previred con 813 caracteres por línea.
-
-Ejemplos de nombres válidos:
-- 077120142202508.TXT
-- datos_previred.txt
-- archivo_trabajadores.TXT
-"@
-        $ejemplo | Out-File -FilePath "ProcesadorPrevired_v1.0/archivos105espacios/COLOQUE_AQUI_SUS_ARCHIVOS.txt" -Encoding UTF8
+        # Crear archivo de ejemplo simple
+        "Coloque aquí sus archivos .txt o .TXT para procesar" | Out-File -FilePath "ProcesadorPrevired_v1.0/archivos105espacios/COLOQUE_AQUI_SUS_ARCHIVOS.txt" -Encoding UTF8
 
     - name: Crear ZIP de distribución
       run: |
