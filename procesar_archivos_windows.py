@@ -10,6 +10,18 @@ import glob
 import math
 import sys
 
+# Importar sistema de versionado
+try:
+    from version import get_version_info
+except ImportError:
+    # Fallback si no existe el archivo de versión
+    def get_version_info():
+        return {
+            'version': '1.2.0',
+            'build_date': 'N/A',
+            'python_version': sys.version.split()[0]
+        }
+
 def detectar_codificacion(archivo_path):
     """
     Detecta la codificación de un archivo probando varias opciones comunes.
@@ -524,10 +536,14 @@ def procesar_archivos():
 
 def main():
     """Función principal con manejo de errores para Windows"""
-    print("=" * 60)
+    version_info = get_version_info()
+    
+    print("=" * 70)
     print("  PROCESADOR DE ARCHIVOS PREVIRED - VERSIÓN WINDOWS")
+    print(f"  Versión: {version_info['version']} | Python: {version_info['python_version']}")
+    print(f"  Compilado: {version_info['build_date']}")
     print("  Compilado con Nuitka para máximo rendimiento")
-    print("=" * 60)
+    print("=" * 70)
     print()
     
     try:

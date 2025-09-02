@@ -2,10 +2,7 @@ name: Compilar Ejecutable Windows
 
 on:
   push:
-    branches: [ main, master ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main, master ]
+    tags: [ 'v*' ]  # Solo compilar cuando se crea un tag de versión
   workflow_dispatch:  # Permite ejecutar manualmente
 
 jobs:
@@ -15,6 +12,21 @@ jobs:
     steps:
     - name: Checkout código
       uses: actions/checkout@v4
+      
+    - name: Obtener versión del tag
+      id: get_version
+      shell: pwsh
+      run: |
+        if ($env:GITHUB_REF -match 'refs/tags/v(.*)') {
+          $version = $Matches[1]
+          echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "Tag version: $version"
+        } else {
+          # Para ejecución manual, obtener versión del archivo
+          $version = python version.py --show | Select-String "Versión:" | ForEach-Object { $_.ToString().Split(': ')[1] }
+          echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "Manual run version: $version"
+        }
       
     - name: Configurar Python
       uses: actions/setup-python@v5
@@ -56,35 +68,37 @@ jobs:
         
     - name: Crear paquete de distribución
       run: |
-        # Crear carpeta de distribución
-        New-Item -ItemType Directory -Force -Path "ProcesadorPrevired_v1.0"
+        # Crear carpeta de distribución con versión dinámica
+        $folderName = "ProcesadorPrevired_v$env:VERSION"
+        New-Item -ItemType Directory -Force -Path $folderName
         
         # Copiar ejecutable
-        Copy-Item "ProcesadorPrevired.exe" "ProcesadorPrevired_v1.0/"
+        Copy-Item "ProcesadorPrevired.exe" "$folderName/"
         
         # Crear estructura de carpetas
-        New-Item -ItemType Directory -Force -Path "ProcesadorPrevired_v1.0/archivos105espacios"
-        New-Item -ItemType Directory -Force -Path "ProcesadorPrevired_v1.0/jornadas"
+        New-Item -ItemType Directory -Force -Path "$folderName/archivos105espacios"
+        New-Item -ItemType Directory -Force -Path "$folderName/jornadas"
         
         # Copiar archivo de jornadas si existe
         if (Test-Path "jornadas/jornadasTrabajadores.csv") {
-          Copy-Item "jornadas/jornadasTrabajadores.csv" "ProcesadorPrevired_v1.0/jornadas/"
+          Copy-Item "jornadas/jornadasTrabajadores.csv" "$folderName/jornadas/"
         }
         
         # Crear archivo de ejemplo simple
-        "Coloque aquí sus archivos .txt o .TXT para procesar" | Out-File -FilePath "ProcesadorPrevired_v1.0/archivos105espacios/COLOQUE_AQUI_SUS_ARCHIVOS.txt" -Encoding UTF8
+        "Coloque aquí sus archivos .txt o .TXT para procesar" | Out-File -FilePath "$folderName/archivos105espacios/COLOQUE_AQUI_SUS_ARCHIVOS.txt" -Encoding UTF8
 
     - name: Crear ZIP de distribución
       run: |
-        Compress-Archive -Path "ProcesadorPrevired_v1.0" -DestinationPath "ProcesadorPrevired_v1.0.zip"
+        $folderName = "ProcesadorPrevired_v$env:VERSION"
+        Compress-Archive -Path $folderName -DestinationPath "$folderName.zip"
         
     - name: Subir ejecutable como artefacto
       uses: actions/upload-artifact@v4
       with:
-        name: ProcesadorPrevired-Windows
+        name: ProcesadorPrevired-Windows-v${{ env.VERSION }}
         path: |
           ProcesadorPrevired.exe
-          ProcesadorPrevired_v1.0.zip
+          ProcesadorPrevired_v${{ env.VERSION }}.zip
         retention-days: 90
         
     - name: Crear release si es tag
@@ -93,34 +107,29 @@ jobs:
       with:
         files: |
           ProcesadorPrevired.exe
-          ProcesadorPrevired_v1.0.zip
-        name: Procesador Previred ${{ github.ref_name }}
+          ProcesadorPrevired_v${{ env.VERSION }}.zip
+        tag_name: ${{ github.ref }}
+        name: "Release v${{ env.VERSION }}"
         body: |
-          ## Procesador de Archivos Previred ${{ github.ref_name }}
+          ## 🚀 Procesador de Archivos Previred v${{ env.VERSION }}
           
-          **Ejecutable Windows compilado con PyInstaller**
+          Ejecutable Windows del procesador de archivos Previred compilado automáticamente.
           
-          ### Archivos incluidos:
+          ### 📦 Archivos incluidos:
           - `ProcesadorPrevired.exe` - Ejecutable standalone
-          - `ProcesadorPrevired_v1.0.zip` - Paquete completo con carpetas e instrucciones
+          - `ProcesadorPrevired_v${{ env.VERSION }}.zip` - Paquete completo con carpetas e instrucciones
           
-          ### Características:
+          ### ✨ Características:
           - ✅ No requiere Python instalado
           - ✅ Ejecutable nativo Windows
           - ✅ Compilado con PyInstaller para máxima compatibilidad
           - ✅ Procesamiento automático de archivos Previred
           - ✅ Validación estricta de RUTs
           - ✅ Manejo de jornadas laborales
+          - ✅ Detección automática de encoding
           - ✅ Compatible con Windows 10/11
           
-          ### Uso:
-          1. Descargue `ProcesadorPrevired_v1.0.zip`
-          2. Extraiga en su computadora
-          3. Siga las instrucciones en `INSTRUCCIONES.txt`
-          
-          ### Notas técnicas:
-          - Tamaño aproximado: 15-25 MB
-          - Tiempo de compilación: ~2-3 minutos
-          - Tested en Windows 10/11
+          ### 📋 Uso:
+          1. Descargue `ProcesadorPrevired_v${{ env.VERSION }}.zip`
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
