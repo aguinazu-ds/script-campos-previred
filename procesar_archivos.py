@@ -424,6 +424,12 @@ def procesar_archivos(tope_imponible_afp):
                     # Extraer codigoMovimientoPersonal: posición 126, largo 2
                     codigoMovimientoPersonal = linea_original[126:128]
 
+                    # Extraer regimenPrevisionalTrabajador: posición 118, largo 3
+                    regimenPrevisionalTrabajador = linea_original[118:121]
+
+                    # Extraer tipoTrabajador: posición 121, largo 1
+                    tipoTrabajador = linea_original[121:122]
+
                     # Extraer indicador de línea principal: posición 124, largo 2
                     indicadorLineaPrincipal = linea_original[124:126]
                     esLineaPrincipal = indicadorLineaPrincipal == "00"
@@ -465,22 +471,40 @@ def procesar_archivos(tope_imponible_afp):
                         except (ValueError, IndexError):
                             imponibleSeguroCesantia = 0
                         
-                        # Calcular cotizaciónAfpActualizada
-                        cotizacionAfpActualizada = calcular_cotizacion_afp_actualizada(rentaImponibleAfp, cotizacionAfp, tope_imponible_afp)
-                        cotizacionAfpActualizadaStr = convertir_a_string_8_ceros(cotizacionAfpActualizada)
+                        # Verificar si debe aplicar cálculos de cotización (solo si régimen AFP y tipo trabajador 0)
+                        debe_calcular_cotizaciones = (regimenPrevisionalTrabajador == "AFP" and tipoTrabajador == "0")
                         
-                        # Calcular cotización expectativa de vida
-                        cotizacionExpectativaVida = calcular_cotizacion_expectativa_vida(
-                            imponibleSeguroCesantia, 
-                            tope_imponible_afp,
-                            tiene_subsidio=tieneSubsidio, 
-                            renta_imponible_afp=rentaImponibleAfp
-                        )
-                        cotizacionExpectativaVidaStr = convertir_a_string_8_ceros(cotizacionExpectativaVida)
+                        if debe_calcular_cotizaciones:
+                            # Calcular cotizaciónAfpActualizada
+                            cotizacionAfpActualizada = calcular_cotizacion_afp_actualizada(rentaImponibleAfp, cotizacionAfp, tope_imponible_afp)
+                            cotizacionAfpActualizadaStr = convertir_a_string_8_ceros(cotizacionAfpActualizada)
+                            
+                            # Calcular cotización expectativa de vida
+                            cotizacionExpectativaVida = calcular_cotizacion_expectativa_vida(
+                                imponibleSeguroCesantia, 
+                                tope_imponible_afp,
+                                tiene_subsidio=tieneSubsidio, 
+                                renta_imponible_afp=rentaImponibleAfp
+                            )
+                            cotizacionExpectativaVidaStr = convertir_a_string_8_ceros(cotizacionExpectativaVida)
+                        else:
+                            # No calcular cotizaciones, mantener valores originales
+                            cotizacionAfpActualizada = cotizacionAfp
+                            cotizacionAfpActualizadaStr = linea_original[182:190]  # Mantener valor original del campo 182
+                            
+                            # Para expectativa de vida, mantener valor original del campo 756
+                            cotizacionExpectativaVidaStr = linea_original[756:764] if len(linea_original) >= 764 else "00000000"
+                            try:
+                                cotizacionExpectativaVida = int(cotizacionExpectativaVidaStr)
+                            except ValueError:
+                                cotizacionExpectativaVida = 0
                         
                         # Aplicar todas las modificaciones a la línea
-                        # 1. Reemplazar cotización AFP (siempre)
-                        linea_modificada = reemplazar_cotizacion_en_linea(linea_original, cotizacionAfpActualizadaStr)
+                        # 1. Reemplazar cotización AFP (solo si debe calcular)
+                        if debe_calcular_cotizaciones:
+                            linea_modificada = reemplazar_cotizacion_en_linea(linea_original, cotizacionAfpActualizadaStr)
+                        else:
+                            linea_modificada = linea_original
                         
                         # 2. Reemplazar campo 740 con imponible cesantía (solo si tiene subsidio)
                         if imponibleSeguroCesantia > 0:
@@ -490,47 +514,56 @@ def procesar_archivos(tope_imponible_afp):
                         # 3. Reemplazar campo 748 con jornada según CSV
                         linea_modificada = reemplazar_campo_748_jornada(linea_modificada, jornada_string)
                         
-                        # 4. Reemplazar campo 756 con cotización expectativa de vida (siempre)
-                        linea_modificada = reemplazar_campo_756_cotizacion_expectativa(linea_modificada, cotizacionExpectativaVidaStr)
+                        # 4. Reemplazar campo 756 con cotización expectativa de vida (solo si debe calcular)
+                        if debe_calcular_cotizaciones:
+                            linea_modificada = reemplazar_campo_756_cotizacion_expectativa(linea_modificada, cotizacionExpectativaVidaStr)
                         
                         print(f"  Línea {numero_linea} (PRINCIPAL) - RUT {rutFormateado}:")
+                        print(f"    Régimen: {regimenPrevisionalTrabajador}, Tipo: {tipoTrabajador} ({'CALCULA' if debe_calcular_cotizaciones else 'MANTIENE ORIGINAL'})")
                         
                         # Mostrar cotización AFP con información de tope si aplica
-                        renta_efectiva_afp = min(rentaImponibleAfp, tope_imponible_afp)
-                        if rentaImponibleAfp > tope_imponible_afp:
-                            print(f"    Cotización AFP: {cotizacionAfp:,} → {cotizacionAfpActualizada:,} (Renta AFP: {rentaImponibleAfp:,} → {renta_efectiva_afp:,} por tope)")
+                        if debe_calcular_cotizaciones:
+                            renta_efectiva_afp = min(rentaImponibleAfp, tope_imponible_afp)
+                            if rentaImponibleAfp > tope_imponible_afp:
+                                print(f"    Cotización AFP: {cotizacionAfp:,} → {cotizacionAfpActualizada:,} (Renta AFP: {rentaImponibleAfp:,} → {renta_efectiva_afp:,} por tope)")
+                            else:
+                                print(f"    Cotización AFP: {cotizacionAfp:,} → {cotizacionAfpActualizada:,}")
                         else:
-                            print(f"    Cotización AFP: {cotizacionAfp:,} → {cotizacionAfpActualizada:,}")
+                            print(f"    Cotización AFP: {cotizacionAfp:,} (SIN CAMBIOS)")
                         
                         print(f"    Campo 740 (ImponibleSegCes): {'REEMPLAZADO' if tieneSubsidio else 'SIN CAMBIOS'} ({'tiene subsidio' if tieneSubsidio else 'no tiene subsidio'})")
                         print(f"    Campo 748 (Jornada): REEMPLAZADO con {jornada_string} ({'completa' if jornada_numero == 1 else 'parcial'})")
                         
                         # Mostrar cotización expectativa de vida con información de tope si aplica
-                        imponible_cesantia_efectivo = min(imponibleSeguroCesantia, tope_imponible_afp)
-                        
-                        if tieneSubsidio:
-                            # Verificar si se aplicaron topes
-                            tope_aplicado_afp = rentaImponibleAfp > tope_imponible_afp
-                            tope_aplicado_cesantia = imponibleSeguroCesantia > tope_imponible_afp
+                        if debe_calcular_cotizaciones:
+                            imponible_cesantia_efectivo = min(imponibleSeguroCesantia, tope_imponible_afp)
                             
-                            if tope_aplicado_afp or tope_aplicado_cesantia:
-                                mensaje_tope = []
-                                if tope_aplicado_afp:
-                                    mensaje_tope.append(f"AFP: {rentaImponibleAfp:,}→{renta_efectiva_afp:,}")
-                                if tope_aplicado_cesantia:
-                                    mensaje_tope.append(f"Cesantía: {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}")
+                            if tieneSubsidio:
+                                # Verificar si se aplicaron topes
+                                tope_aplicado_afp = rentaImponibleAfp > tope_imponible_afp
+                                tope_aplicado_cesantia = imponibleSeguroCesantia > tope_imponible_afp
                                 
-                                print(f"    Campo 756 (CotizExpVida): ({renta_efectiva_afp:,} + {imponible_cesantia_efectivo:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO) [TOPE: {', '.join(mensaje_tope)}]")
+                                if tope_aplicado_afp or tope_aplicado_cesantia:
+                                    mensaje_tope = []
+                                    if tope_aplicado_afp:
+                                        mensaje_tope.append(f"AFP: {rentaImponibleAfp:,}→{renta_efectiva_afp:,}")
+                                    if tope_aplicado_cesantia:
+                                        mensaje_tope.append(f"Cesantía: {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}")
+                                    
+                                    print(f"    Campo 756 (CotizExpVida): ({renta_efectiva_afp:,} + {imponible_cesantia_efectivo:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO) [TOPE: {', '.join(mensaje_tope)}]")
+                                else:
+                                    print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponibleSeguroCesantia:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO)")
                             else:
-                                print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponibleSeguroCesantia:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO)")
+                                if imponibleSeguroCesantia > tope_imponible_afp:
+                                    print(f"    Campo 756 (CotizExpVida): {imponible_cesantia_efectivo:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} [TOPE: Cesantía {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}]")
+                                else:
+                                    print(f"    Campo 756 (CotizExpVida): {imponibleSeguroCesantia:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr}")
                         else:
-                            if imponibleSeguroCesantia > tope_imponible_afp:
-                                print(f"    Campo 756 (CotizExpVida): {imponible_cesantia_efectivo:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} [TOPE: Cesantía {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}]")
-                            else:
-                                print(f"    Campo 756 (CotizExpVida): {imponibleSeguroCesantia:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr}")
+                            print(f"    Campo 756 (CotizExpVida): {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (SIN CAMBIOS)")
                     
                     else:
                         linea_modificada = linea_original  # No modificar líneas no principales
+                        debe_calcular_cotizaciones = False  # Para líneas no principales
                     
                     # Si no existe el grupo, crearlo
                     if rutTrabajador not in grupos:
@@ -545,6 +578,9 @@ def procesar_archivos(tope_imponible_afp):
                         'jornada_numero': jornada_numero,
                         'jornada_string': jornada_string,
                         'codigoMovimientoPersonal': codigoMovimientoPersonal,
+                        'regimenPrevisionalTrabajador': regimenPrevisionalTrabajador,
+                        'tipoTrabajador': tipoTrabajador,
+                        'debe_calcular_cotizaciones': debe_calcular_cotizaciones if esLineaPrincipal else False,
                         'tieneSubsidio': tieneSubsidio,
                         'indicadorLineaPrincipal': indicadorLineaPrincipal,
                         'esLineaPrincipal': esLineaPrincipal,
