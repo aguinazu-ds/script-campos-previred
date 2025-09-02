@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Wine
+.wine*
+*.exe.so
+
+# Archivos temporales
+*.tmp
+*.temp
+*.log
+
+# Archivos de prueba (mantener estructura pero no contenido)
+archivos105espacios/*.txt
+archivos105espacios/*.TXT
+archivos_modificados/
+!archivos105espacios/.gitkeep
+!archivos_modificados/.gitkeep
+
+# Ejecutables compilados
+ProcesadorPrevired
+ProcesadorPrevired.exe
+*.exe
+
+# Directorios de paquetes
+ProcesadorPrevired_v*/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs de compilación
+pip-log.txt
+pip-delete-this-directory.txt

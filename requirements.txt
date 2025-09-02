@@ -1,0 +1,9 @@
+# Dependencias para el Procesador de Archivos Previred
+# Para compilación con PyInstaller
+pyinstaller>=6.0.0
+
+# Para desarrollo y testing (opcional)
+# auto-py-to-exe>=2.0.0
+
+# Nota: El script principal no requiere dependencias externas
+# Solo usa librerías estándar de Python (os, glob, math)

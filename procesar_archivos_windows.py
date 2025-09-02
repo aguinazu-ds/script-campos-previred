@@ -8,6 +8,7 @@ Procesa archivos de ancho fijo y aplica transformaciones según jornadas de trab
 import os
 import glob
 import math
+import sys
 
 def cargar_jornadas_trabajadores():
     """
@@ -18,7 +19,14 @@ def cargar_jornadas_trabajadores():
     """
     jornadas = {}
     # Para Windows, usar ruta relativa desde el directorio del script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Si es ejecutable PyInstaller, usar el directorio donde está el .exe
+    if getattr(sys, 'frozen', False):
+        # Ejecutable PyInstaller
+        script_dir = os.path.dirname(sys.executable)
+    else:
+        # Script Python normal
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+    
     archivo_jornadas = os.path.join(script_dir, "jornadas", "jornadasTrabajadores.csv")
     
     if not os.path.exists(archivo_jornadas):
@@ -245,7 +253,14 @@ def crear_carpeta_salida():
     Returns:
         Nombre de la carpeta de salida
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Si es ejecutable PyInstaller, usar el directorio donde está el .exe
+    if getattr(sys, 'frozen', False):
+        # Ejecutable PyInstaller
+        script_dir = os.path.dirname(sys.executable)
+    else:
+        # Script Python normal
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+    
     carpeta_salida = os.path.join(script_dir, "archivos_modificados")
     
     if not os.path.exists(carpeta_salida):
@@ -262,7 +277,14 @@ def procesar_archivos():
     jornadas_trabajadores = cargar_jornadas_trabajadores()
     
     # Buscar archivos .txt en la carpeta archivos105espacios (relativa al script)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Si es ejecutable PyInstaller, usar el directorio donde está el .exe
+    if getattr(sys, 'frozen', False):
+        # Ejecutable PyInstaller
+        script_dir = os.path.dirname(sys.executable)
+    else:
+        # Script Python normal
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+    
     carpeta = os.path.join(script_dir, "archivos105espacios")
     
     if not os.path.exists(carpeta):
@@ -511,4 +533,4 @@ if __name__ == "__main__":
     if exit_code != 0:
         print("\nPresione Enter para cerrar...")
         input()
-    exit(exit_code)
+    sys.exit(exit_code)

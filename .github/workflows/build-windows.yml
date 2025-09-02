@@ -1,0 +1,193 @@
+name: Compilar Ejecutable Windows
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Permite ejecutar manualmente
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+      
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        
+    - name: Compilar con PyInstaller
+      run: |
+        pyinstaller ^
+          --onefile ^
+          --console ^
+          --name ProcesadorPrevired ^
+          --add-data "archivos105espacios;archivos105espacios" ^
+          --add-data "jornadas;jornadas" ^
+          --distpath . ^
+          --workpath build ^
+          --specpath build ^
+          procesar_archivos_windows.py
+          
+    - name: Verificar ejecutable
+      run: |
+        if (Test-Path "ProcesadorPrevired.exe") {
+          Write-Host "✅ Ejecutable creado exitosamente"
+          $size = (Get-Item "ProcesadorPrevired.exe").Length
+          Write-Host "📊 Tamaño: $size bytes"
+          
+          # Mostrar información del ejecutable
+          Write-Host "📋 Información del ejecutable:"
+          Get-ItemProperty "ProcesadorPrevired.exe" | Select-Object Name, Length, LastWriteTime
+        } else {
+          Write-Host "❌ Error: Ejecutable no encontrado"
+          Write-Host "📁 Contenido del directorio:"
+          Get-ChildItem -Force
+          exit 1
+        }
+        
+    - name: Crear paquete de distribución
+      run: |
+        # Crear carpeta de distribución
+        New-Item -ItemType Directory -Force -Path "ProcesadorPrevired_v1.0"
+        
+        # Copiar ejecutable
+        Copy-Item "ProcesadorPrevired.exe" "ProcesadorPrevired_v1.0/"
+        
+        # Crear estructura de carpetas
+        New-Item -ItemType Directory -Force -Path "ProcesadorPrevired_v1.0/archivos105espacios"
+        New-Item -ItemType Directory -Force -Path "ProcesadorPrevired_v1.0/jornadas"
+        
+        # Copiar archivo de jornadas si existe
+        if (Test-Path "jornadas/jornadasTrabajadores.csv") {
+          Copy-Item "jornadas/jornadasTrabajadores.csv" "ProcesadorPrevired_v1.0/jornadas/"
+        }
+        
+        # Crear archivo de instrucciones
+        @"
+PROCESADOR DE ARCHIVOS PREVIRED - INSTRUCCIONES DE USO
+=====================================================
+
+REQUISITOS:
+- Windows 10/11
+- NO requiere Python instalado
+
+PREPARACIÓN:
+1. Coloque sus archivos .txt o .TXT en la carpeta "archivos105espacios"
+2. Verifique que el archivo "jornadas\jornadasTrabajadores.csv" contenga
+   todos los RUTs de sus trabajadores con su jornada correspondiente
+
+FORMATO DEL ARCHIVO DE JORNADAS:
+- Archivo: jornadas\jornadasTrabajadores.csv
+- Formato: rut;jornada
+- Ejemplo:
+  rut;jornada
+  12345678-9;1
+  98765432-1;2
+
+VALORES DE JORNADA:
+- 1 = Jornada completa
+- 2 = Jornada parcial
+
+USO:
+1. Ejecute ProcesadorPrevired.exe
+2. El programa procesará automáticamente todos los archivos
+3. Los resultados aparecerán en la carpeta "archivos_modificados"
+
+IMPORTANTE:
+- TODOS los RUTs en los archivos de datos deben estar en jornadasTrabajadores.csv
+- Si falta algún RUT, el programa se detendrá con un mensaje de error
+- Los archivos originales NUNCA se modifican
+
+ESTRUCTURA DE CARPETAS REQUERIDA:
+ProcesadorPrevired_v1.0/
+├── ProcesadorPrevired.exe           (ejecutable principal)
+├── archivos105espacios/             (coloque aquí sus archivos .txt)
+├── jornadas/                        (archivo de jornadas)
+│   └── jornadasTrabajadores.csv
+├── archivos_modificados/            (se crea automáticamente)
+└── INSTRUCCIONES.txt                (este archivo)
+
+NOTAS TÉCNICAS:
+- Compilado con PyInstaller para máxima compatibilidad
+- Ejecutable standalone (no requiere instalación)
+- Compatible con Windows 10/11 (64-bit)
+
+=====================================================
+Procesador compilado con PyInstaller
+Versión 1.0 - 2024
+"@ | Out-File -FilePath "ProcesadorPrevired_v1.0/INSTRUCCIONES.txt" -Encoding UTF8
+        
+        # Crear archivo de ejemplo
+        @"
+Coloque aquí sus archivos .txt o .TXT
+
+Los archivos deben tener el formato de ancho fijo
+de Previred con 813 caracteres por línea.
+
+Ejemplos de nombres válidos:
+- 077120142202508.TXT
+- datos_previred.txt
+- archivo_trabajadores.TXT
+"@ | Out-File -FilePath "ProcesadorPrevired_v1.0/archivos105espacios/COLOQUE_AQUI_SUS_ARCHIVOS.txt" -Encoding UTF8
+
+    - name: Crear ZIP de distribución
+      run: |
+        Compress-Archive -Path "ProcesadorPrevired_v1.0" -DestinationPath "ProcesadorPrevired_v1.0.zip"
+        
+    - name: Subir ejecutable como artefacto
+      uses: actions/upload-artifact@v3
+      with:
+        name: ProcesadorPrevired-Windows
+        path: |
+          ProcesadorPrevired.exe
+          ProcesadorPrevired_v1.0.zip
+        retention-days: 90
+        
+    - name: Crear release si es tag
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ProcesadorPrevired.exe
+          ProcesadorPrevired_v1.0.zip
+        name: Procesador Previred ${{ github.ref_name }}
+        body: |
+          ## Procesador de Archivos Previred ${{ github.ref_name }}
+          
+          **Ejecutable Windows compilado con PyInstaller**
+          
+          ### Archivos incluidos:
+          - `ProcesadorPrevired.exe` - Ejecutable standalone
+          - `ProcesadorPrevired_v1.0.zip` - Paquete completo con carpetas e instrucciones
+          
+          ### Características:
+          - ✅ No requiere Python instalado
+          - ✅ Ejecutable nativo Windows
+          - ✅ Compilado con PyInstaller para máxima compatibilidad
+          - ✅ Procesamiento automático de archivos Previred
+          - ✅ Validación estricta de RUTs
+          - ✅ Manejo de jornadas laborales
+          - ✅ Compatible con Windows 10/11
+          
+          ### Uso:
+          1. Descargue `ProcesadorPrevired_v1.0.zip`
+          2. Extraiga en su computadora
+          3. Siga las instrucciones en `INSTRUCCIONES.txt`
+          
+          ### Notas técnicas:
+          - Tamaño aproximado: 15-25 MB
+          - Tiempo de compilación: ~2-3 minutos
+          - Tested en Windows 10/11
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
