@@ -10,6 +10,32 @@ import glob
 import math
 import sys
 
+def detectar_codificacion(archivo_path):
+    """
+    Detecta la codificación de un archivo probando varias opciones comunes.
+    
+    Args:
+        archivo_path: Ruta al archivo
+    
+    Returns:
+        String con la codificación detectada
+    """
+    codificaciones = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+    
+    for encoding in codificaciones:
+        try:
+            with open(archivo_path, 'r', encoding=encoding) as f:
+                # Leer una muestra del archivo para verificar
+                muestra = f.read(1024)
+                # Si llegamos aquí sin excepción, la codificación es válida
+                return encoding
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    
+    # Si ninguna funciona, usar utf-8 con errors='replace'
+    print(f"⚠️ No se pudo detectar la codificación de {archivo_path}, usando utf-8 con reemplazo de caracteres")
+    return 'utf-8'
+
 def cargar_jornadas_trabajadores():
     """
     Carga las jornadas de los trabajadores desde el archivo CSV.
@@ -35,7 +61,11 @@ def cargar_jornadas_trabajadores():
         return jornadas
     
     try:
-        with open(archivo_jornadas, 'r', encoding='utf-8') as f:
+        # Detectar codificación del archivo de jornadas
+        encoding_jornadas = detectar_codificacion(archivo_jornadas)
+        print(f"📄 Codificación detectada para jornadas: {encoding_jornadas}")
+        
+        with open(archivo_jornadas, 'r', encoding=encoding_jornadas) as f:
             lines = f.readlines()
             
             # Saltar header si existe
@@ -312,13 +342,21 @@ def procesar_archivos():
     # Map para agrupar por el campo posición 0, largo 11
     grupos = {}
     archivos_modificados = {}  # Para almacenar las líneas modificadas por archivo
+    codificaciones_archivos = {}  # Para almacenar la codificación detectada de cada archivo
     
     for archivo in archivos:
         print(f"\nProcesando archivo: {os.path.basename(archivo)}")
         nombre_archivo = os.path.basename(archivo)
         archivos_modificados[nombre_archivo] = []
         
-        with open(archivo, 'r', encoding='utf-8', errors='replace') as f:
+        # Detectar codificación del archivo de datos
+        encoding_archivo = detectar_codificacion(archivo)
+        print(f"📄 Codificación detectada para {nombre_archivo}: {encoding_archivo}")
+        
+        # Almacenar la codificación para usar al guardar
+        codificaciones_archivos[nombre_archivo] = encoding_archivo
+        
+        with open(archivo, 'r', encoding=encoding_archivo) as f:
             for numero_linea, linea in enumerate(f, 1):
                 linea_original = linea.rstrip('\n\r')
                 linea_modificada = linea_original  # Por defecto, no modificar
@@ -455,7 +493,11 @@ def procesar_archivos():
     print(f"\n=== GUARDANDO ARCHIVOS MODIFICADOS ===")
     for nombre_archivo, lineas in archivos_modificados.items():
         ruta_salida = os.path.join(carpeta_salida, nombre_archivo)
-        with open(ruta_salida, 'w', encoding='utf-8') as f:
+        # Usar la misma codificación que el archivo original
+        encoding_salida = codificaciones_archivos.get(nombre_archivo, 'utf-8')
+        print(f"💾 Guardando {nombre_archivo} con codificación: {encoding_salida}")
+        
+        with open(ruta_salida, 'w', encoding=encoding_salida) as f:
             for linea in lineas:
                 f.write(linea + '\n')
         print(f"Archivo guardado: {os.path.basename(ruta_salida)}")
