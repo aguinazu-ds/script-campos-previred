@@ -193,17 +193,27 @@ def reemplazar_cotizacion_en_linea(linea, nueva_cotizacion_str):
     linea_modificada = linea[:182] + nueva_cotizacion_str + linea[190:]
     return linea_modificada
 
-def calcular_cotizacion_expectativa_vida(imponible_seguro_cesantia):
+def calcular_cotizacion_expectativa_vida(imponible_seguro_cesantia, tiene_subsidio=False, renta_imponible_afp=0):
     """
-    Calcula la cotización expectativa de vida (imponibleSeguroCesantia * 0.009) redondeada.
+    Calcula la cotización expectativa de vida:
+    - Sin subsidio: (imponibleSeguroCesantia * 0.009) redondeada
+    - Con subsidio: ((rentaImponibleAfp + imponibleSeguroCesantia) * 0.009) redondeada
     
     Args:
         imponible_seguro_cesantia: Imponible seguro cesantía (entero)
+        tiene_subsidio: True si el trabajador tiene subsidio
+        renta_imponible_afp: Renta imponible AFP (entero), usado solo si tiene subsidio
     
     Returns:
         Cotización expectativa de vida (entero redondeado)
     """
-    cotizacion = imponible_seguro_cesantia * 0.009
+    if tiene_subsidio:
+        # Con subsidio: usar tanto rentaImponibleAfp como imponibleSeguroCesantia
+        cotizacion = (renta_imponible_afp + imponible_seguro_cesantia) * 0.009
+    else:
+        # Sin subsidio: solo imponibleSeguroCesantia
+        cotizacion = imponible_seguro_cesantia * 0.009
+    
     return round(cotizacion)
 
 def reemplazar_campo_740_imponible_cesantia(linea, imponible_cesantia_str, tiene_subsidio=False):
@@ -391,7 +401,11 @@ def procesar_archivos():
                         cotizacionAfpActualizadaStr = convertir_a_string_8_ceros(cotizacionAfpActualizada)
                         
                         # Calcular cotización expectativa de vida
-                        cotizacionExpectativaVida = calcular_cotizacion_expectativa_vida(imponibleSeguroCesantia)
+                        cotizacionExpectativaVida = calcular_cotizacion_expectativa_vida(
+                            imponibleSeguroCesantia, 
+                            tiene_subsidio=tieneSubsidio, 
+                            renta_imponible_afp=rentaImponibleAfp
+                        )
                         cotizacionExpectativaVidaStr = convertir_a_string_8_ceros(cotizacionExpectativaVida)
                         
                         # Aplicar todas las modificaciones a la línea
@@ -413,7 +427,11 @@ def procesar_archivos():
                         print(f"    Cotización AFP: {cotizacionAfp:,} → {cotizacionAfpActualizada:,}")
                         print(f"    Campo 740 (ImponibleSegCes): {'REEMPLAZADO' if tieneSubsidio else 'SIN CAMBIOS'} ({'tiene subsidio' if tieneSubsidio else 'no tiene subsidio'})")
                         print(f"    Campo 748 (Jornada): REEMPLAZADO con {jornada_string} ({'completa' if jornada_numero == 1 else 'parcial'})")
-                        print(f"    Campo 756 (CotizExpVida): {imponibleSeguroCesantia:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr}")
+                        
+                        if tieneSubsidio:
+                            print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponibleSeguroCesantia:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO)")
+                        else:
+                            print(f"    Campo 756 (CotizExpVida): {imponibleSeguroCesantia:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr}")
                     
                     else:
                         linea_modificada = linea_original  # No modificar líneas no principales
