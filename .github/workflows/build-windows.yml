@@ -5,6 +5,11 @@ on:
     tags: [ 'v*' ]  # Solo compilar cuando se crea un tag de versión
   workflow_dispatch:  # Permite ejecutar manualmente
 
+# Permisos necesarios para crear releases
+permissions:
+  contents: write
+  pull-requests: read
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -103,12 +108,12 @@ jobs:
         
     - name: Crear release si es tag
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: |
           ProcesadorPrevired.exe
           ProcesadorPrevired_v${{ env.VERSION }}.zip
-        tag_name: ${{ github.ref }}
+        tag_name: ${{ github.ref_name }}
         name: "Release v${{ env.VERSION }}"
         body: |
           ## 🚀 Procesador de Archivos Previred v${{ env.VERSION }}
@@ -127,9 +132,12 @@ jobs:
           - ✅ Validación estricta de RUTs
           - ✅ Manejo de jornadas laborales
           - ✅ Detección automática de encoding
+          - ✅ Sistema de topes imponibles AFP
           - ✅ Compatible con Windows 10/11
           
           ### 📋 Uso:
           1. Descargue `ProcesadorPrevired_v${{ env.VERSION }}.zip`
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          2. Extraiga en una carpeta
+          3. Ejecute `ProcesadorPrevired.exe`
+          4. Siga las instrucciones en pantalla
+        token: ${{ secrets.GITHUB_TOKEN }}
