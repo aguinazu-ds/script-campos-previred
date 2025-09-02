@@ -22,6 +22,41 @@ except ImportError:
             'python_version': sys.version.split()[0]
         }
 
+def solicitar_tope_imponible_afp():
+    """
+    Solicita al usuario el tope imponible AFP del mes en pesos.
+    
+    Returns:
+        int: Tope imponible AFP en pesos (número entero)
+    """
+    while True:
+        try:
+            print("📊 CONFIGURACIÓN INICIAL")
+            print("=" * 50)
+            tope_str = input("Ingrese el tope imponible AFP del mes en pesos (número entero): ")
+            
+            # Remover separadores de miles si los hay (comas, puntos)
+            tope_str = tope_str.replace(',', '').replace('.', '')
+            
+            tope_imponible = int(tope_str)
+            
+            if tope_imponible <= 0:
+                print("❌ Error: El tope debe ser un número positivo mayor a 0")
+                continue
+            
+            # Confirmar el valor ingresado
+            print(f"✅ Tope imponible AFP configurado: ${tope_imponible:,} pesos")
+            print()
+            return tope_imponible
+            
+        except ValueError:
+            print("❌ Error: Debe ingresar un número entero válido")
+            print("   Ejemplo: 2460000 o 2,460,000")
+            continue
+        except KeyboardInterrupt:
+            print("\n\n🛑 Operación cancelada por el usuario")
+            sys.exit(0)
+
 def detectar_codificacion(archivo_path):
     """
     Detecta la codificación de un archivo probando varias opciones comunes.
@@ -181,14 +216,17 @@ def convertir_a_string_8_ceros(valor):
     """
     return str(valor).zfill(8)
 
-def calcular_cotizacion_afp_actualizada(renta_imponible_afp, cotizacion_afp):
+def calcular_cotizacion_afp_actualizada(renta_imponible_afp, cotizacion_afp, tope_imponible_afp):
     """
     Calcula la cotización AFP actualizada según la fórmula:
     (rentaImponibleAfp * 0.001) + cotizacionAfp, aproximado al entero más cercano
     
+    Si rentaImponibleAfp es mayor al tope, se usa el tope en el cálculo.
+    
     Args:
         renta_imponible_afp: Renta imponible AFP (entero)
         cotizacion_afp: Cotización AFP original (entero)
+        tope_imponible_afp: Tope imponible AFP del mes (entero)
     
     Returns:
         Valor entero aproximado al más cercano
@@ -196,8 +234,11 @@ def calcular_cotizacion_afp_actualizada(renta_imponible_afp, cotizacion_afp):
     if renta_imponible_afp is None or cotizacion_afp is None:
         return 0
     
-    # Calcular: (rentaImponibleAfp * 0.001) + cotizacionAfp
-    resultado = (renta_imponible_afp * 0.001) + cotizacion_afp
+    # Aplicar tope si la renta imponible AFP lo excede
+    renta_efectiva = min(renta_imponible_afp, tope_imponible_afp)
+    
+    # Calcular: (rentaImponibleAfp efectiva * 0.001) + cotizacionAfp
+    resultado = (renta_efectiva * 0.001) + cotizacion_afp
     
     # Aproximar al entero más cercano (redondeo normal)
     return round(resultado)
@@ -220,26 +261,33 @@ def reemplazar_cotizacion_en_linea(linea, nueva_cotizacion_str):
     linea_modificada = linea[:182] + nueva_cotizacion_str + linea[190:]
     return linea_modificada
 
-def calcular_cotizacion_expectativa_vida(imponible_seguro_cesantia, tiene_subsidio=False, renta_imponible_afp=0):
+def calcular_cotizacion_expectativa_vida(imponible_seguro_cesantia, tope_imponible_afp, tiene_subsidio=False, renta_imponible_afp=0):
     """
     Calcula la cotización expectativa de vida:
     - Sin subsidio: (imponibleSeguroCesantia * 0.009) redondeada
     - Con subsidio: ((rentaImponibleAfp + imponibleSeguroCesantia) * 0.009) redondeada
     
+    Si algún valor excede el tope imponible, se usa el tope en el cálculo.
+    
     Args:
         imponible_seguro_cesantia: Imponible seguro cesantía (entero)
+        tope_imponible_afp: Tope imponible AFP del mes (entero)
         tiene_subsidio: True si el trabajador tiene subsidio
         renta_imponible_afp: Renta imponible AFP (entero), usado solo si tiene subsidio
     
     Returns:
         Cotización expectativa de vida (entero redondeado)
     """
+    # Aplicar tope a los valores si los exceden
+    imponible_cesantia_efectivo = min(imponible_seguro_cesantia, tope_imponible_afp)
+    renta_afp_efectiva = min(renta_imponible_afp, tope_imponible_afp)
+    
     if tiene_subsidio:
-        # Con subsidio: usar tanto rentaImponibleAfp como imponibleSeguroCesantia
-        cotizacion = (renta_imponible_afp + imponible_seguro_cesantia) * 0.009
+        # Con subsidio: usar tanto rentaImponibleAfp como imponibleSeguroCesantia (con topes aplicados)
+        cotizacion = (renta_afp_efectiva + imponible_cesantia_efectivo) * 0.009
     else:
-        # Sin subsidio: solo imponibleSeguroCesantia
-        cotizacion = imponible_seguro_cesantia * 0.009
+        # Sin subsidio: solo imponibleSeguroCesantia (con tope aplicado)
+        cotizacion = imponible_cesantia_efectivo * 0.009
     
     return round(cotizacion)
 
@@ -323,11 +371,13 @@ def crear_carpeta_salida():
     
     return carpeta_salida
 
-def procesar_archivos():
+def procesar_archivos(tope_imponible_afp):
     # Cargar jornadas de trabajadores al inicio
     print("=== CARGANDO JORNADAS DE TRABAJADORES ===")
     jornadas_trabajadores = cargar_jornadas_trabajadores()
     
+    print(f"📊 Tope imponible AFP del mes: ${tope_imponible_afp:,} pesos")
+    print()
     # Buscar archivos .txt en la carpeta archivos105espacios (relativa al script)
     # Si es ejecutable PyInstaller, usar el directorio donde está el .exe
     if getattr(sys, 'frozen', False):
@@ -450,12 +500,13 @@ def procesar_archivos():
                             imponibleSeguroCesantia = 0
                         
                         # Calcular cotizaciónAfpActualizada
-                        cotizacionAfpActualizada = calcular_cotizacion_afp_actualizada(rentaImponibleAfp, cotizacionAfp)
+                        cotizacionAfpActualizada = calcular_cotizacion_afp_actualizada(rentaImponibleAfp, cotizacionAfp, tope_imponible_afp)
                         cotizacionAfpActualizadaStr = convertir_a_string_8_ceros(cotizacionAfpActualizada)
                         
                         # Calcular cotización expectativa de vida
                         cotizacionExpectativaVida = calcular_cotizacion_expectativa_vida(
                             imponibleSeguroCesantia, 
+                            tope_imponible_afp,
                             tiene_subsidio=tieneSubsidio, 
                             renta_imponible_afp=rentaImponibleAfp
                         )
@@ -477,14 +528,40 @@ def procesar_archivos():
                         linea_modificada = reemplazar_campo_756_cotizacion_expectativa(linea_modificada, cotizacionExpectativaVidaStr)
                         
                         print(f"  Línea {numero_linea} (PRINCIPAL) - RUT {rutFormateado}:")
-                        print(f"    Cotización AFP: {cotizacionAfp:,} → {cotizacionAfpActualizada:,}")
+                        
+                        # Mostrar cotización AFP con información de tope si aplica
+                        renta_efectiva_afp = min(rentaImponibleAfp, tope_imponible_afp)
+                        if rentaImponibleAfp > tope_imponible_afp:
+                            print(f"    Cotización AFP: {cotizacionAfp:,} → {cotizacionAfpActualizada:,} (Renta AFP: {rentaImponibleAfp:,} → {renta_efectiva_afp:,} por tope)")
+                        else:
+                            print(f"    Cotización AFP: {cotizacionAfp:,} → {cotizacionAfpActualizada:,}")
+                        
                         print(f"    Campo 740 (ImponibleSegCes): {'REEMPLAZADO' if tieneSubsidio else 'SIN CAMBIOS'} ({'tiene subsidio' if tieneSubsidio else 'no tiene subsidio'})")
                         print(f"    Campo 748 (Jornada): REEMPLAZADO con {jornada_string} ({'completa' if jornada_numero == 1 else 'parcial'})")
                         
+                        # Mostrar cotización expectativa de vida con información de tope si aplica
+                        imponible_cesantia_efectivo = min(imponibleSeguroCesantia, tope_imponible_afp)
+                        
                         if tieneSubsidio:
-                            print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponibleSeguroCesantia:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO)")
+                            # Verificar si se aplicaron topes
+                            tope_aplicado_afp = rentaImponibleAfp > tope_imponible_afp
+                            tope_aplicado_cesantia = imponibleSeguroCesantia > tope_imponible_afp
+                            
+                            if tope_aplicado_afp or tope_aplicado_cesantia:
+                                mensaje_tope = []
+                                if tope_aplicado_afp:
+                                    mensaje_tope.append(f"AFP: {rentaImponibleAfp:,}→{renta_efectiva_afp:,}")
+                                if tope_aplicado_cesantia:
+                                    mensaje_tope.append(f"Cesantía: {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}")
+                                
+                                print(f"    Campo 756 (CotizExpVida): ({renta_efectiva_afp:,} + {imponible_cesantia_efectivo:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO) [TOPE: {', '.join(mensaje_tope)}]")
+                            else:
+                                print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponibleSeguroCesantia:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO)")
                         else:
-                            print(f"    Campo 756 (CotizExpVida): {imponibleSeguroCesantia:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr}")
+                            if imponibleSeguroCesantia > tope_imponible_afp:
+                                print(f"    Campo 756 (CotizExpVida): {imponible_cesantia_efectivo:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} [TOPE: Cesantía {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}]")
+                            else:
+                                print(f"    Campo 756 (CotizExpVida): {imponibleSeguroCesantia:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr}")
                     
                     else:
                         linea_modificada = linea_original  # No modificar líneas no principales
@@ -547,7 +624,10 @@ def main():
     print()
     
     try:
-        resultado = procesar_archivos()
+        # Solicitar tope imponible AFP al usuario
+        tope_imponible_afp = solicitar_tope_imponible_afp()
+        
+        resultado = procesar_archivos(tope_imponible_afp)
         if resultado is None:
             # El procesamiento se detuvo por un error crítico
             return 1
