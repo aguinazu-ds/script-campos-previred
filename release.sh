@@ -1,8 +1,5 @@
 #!/bin/bash
-# -*- coding: utf-8 -*-
-"""
-Script de automatización para releases con versionado automático
-"""
+# Script de automatización para releases con versionado automático
 
 # Colores para output
 RED='\033[0;31m'
