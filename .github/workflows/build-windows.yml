@@ -28,15 +28,13 @@ jobs:
         
     - name: Compilar con PyInstaller
       run: |
-        pyinstaller ^
-          --onefile ^
-          --console ^
-          --name ProcesadorPrevired ^
-          --add-data "archivos105espacios;archivos105espacios" ^
-          --add-data "jornadas;jornadas" ^
-          --distpath . ^
-          --workpath build ^
-          --specpath build ^
+        pyinstaller `
+          --onefile `
+          --console `
+          --name ProcesadorPrevired `
+          --distpath . `
+          --workpath build `
+          --specpath build `
           procesar_archivos_windows.py
           
     - name: Verificar ejecutable
