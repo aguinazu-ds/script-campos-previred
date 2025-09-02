@@ -74,7 +74,7 @@ jobs:
         }
         
         # Crear archivo de instrucciones
-        @"
+        $instrucciones = @"
 PROCESADOR DE ARCHIVOS PREVIRED - INSTRUCCIONES DE USO
 =====================================================
 
@@ -126,10 +126,11 @@ NOTAS TÉCNICAS:
 =====================================================
 Procesador compilado con PyInstaller
 Versión 1.0 - 2024
-"@ | Out-File -FilePath "ProcesadorPrevired_v1.0/INSTRUCCIONES.txt" -Encoding UTF8
+"@
+        $instrucciones | Out-File -FilePath "ProcesadorPrevired_v1.0/INSTRUCCIONES.txt" -Encoding UTF8
         
         # Crear archivo de ejemplo
-        @"
+        $ejemplo = @"
 Coloque aquí sus archivos .txt o .TXT
 
 Los archivos deben tener el formato de ancho fijo
@@ -139,7 +140,8 @@ Ejemplos de nombres válidos:
 - 077120142202508.TXT
 - datos_previred.txt
 - archivo_trabajadores.TXT
-"@ | Out-File -FilePath "ProcesadorPrevired_v1.0/archivos105espacios/COLOQUE_AQUI_SUS_ARCHIVOS.txt" -Encoding UTF8
+"@
+        $ejemplo | Out-File -FilePath "ProcesadorPrevired_v1.0/archivos105espacios/COLOQUE_AQUI_SUS_ARCHIVOS.txt" -Encoding UTF8
 
     - name: Crear ZIP de distribución
       run: |
