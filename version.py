@@ -10,7 +10,7 @@ from datetime import datetime
 
 # Versión actual del software
 VERSION_MAJOR = 1
-VERSION_MINOR = 5
+VERSION_MINOR = 6
 VERSION_PATCH = 0
 
 def get_version():

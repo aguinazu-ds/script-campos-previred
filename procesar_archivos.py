@@ -9,6 +9,7 @@ import os
 import glob
 import math
 import sys
+from datetime import datetime
 
 # Importar sistema de versionado
 try:
@@ -195,6 +196,78 @@ def obtener_jornada_trabajador(rut_formateado, jornadas_dict):
     
     return jornada_numero, jornada_string
 
+def extraer_fecha_subsidio(linea, posicion):
+    """
+    Extrae una fecha en formato dd-mm-aaaa desde una posición específica de la línea.
+    
+    Args:
+        linea: Línea del archivo
+        posicion: Posición inicial donde comienza la fecha (largo 10)
+    
+    Returns:
+        String con la fecha en formato dd-mm-aaaa o None si hay error
+    """
+    try:
+        if len(linea) < posicion + 10:
+            return None
+        
+        fecha_str = linea[posicion:posicion + 10]
+        
+        # Verificar que tenga el formato esperado (dd-mm-aaaa)
+        if len(fecha_str) == 10 and fecha_str[2] == '-' and fecha_str[5] == '-':
+            return fecha_str
+        else:
+            return None
+            
+    except Exception:
+        return None
+
+def convertir_fecha_a_datetime(fecha_str):
+    """
+    Convierte una fecha en formato dd-mm-aaaa a objeto datetime.
+    
+    Args:
+        fecha_str: Fecha en formato dd-mm-aaaa
+    
+    Returns:
+        Objeto datetime o None si hay error
+    """
+    try:
+        if fecha_str is None or len(fecha_str) != 10:
+            return None
+        
+        return datetime.strptime(fecha_str, "%d-%m-%Y")
+    except Exception:
+        return None
+
+def calcular_duracion_dias(fecha_desde_str, fecha_hasta_str):
+    """
+    Calcula la duración en días entre dos fechas (inclusive).
+    
+    Args:
+        fecha_desde_str: Fecha inicio en formato dd-mm-aaaa
+        fecha_hasta_str: Fecha fin en formato dd-mm-aaaa
+    
+    Returns:
+        Número de días (entero) o 0 si hay error
+    """
+    try:
+        fecha_desde = convertir_fecha_a_datetime(fecha_desde_str)
+        fecha_hasta = convertir_fecha_a_datetime(fecha_hasta_str)
+        
+        if fecha_desde is None or fecha_hasta is None:
+            return 0
+        
+        # Calcular diferencia (agregar 1 para incluir ambos días)
+        diferencia = fecha_hasta - fecha_desde
+        duracion = diferencia.days + 1
+        
+        # Asegurar que no sea negativo
+        return max(0, duracion)
+        
+    except Exception:
+        return 0
+
 def convertir_a_string_8_ceros(valor):
     """
     Convierte un valor entero a string de largo 8 con ceros a la izquierda.
@@ -252,50 +325,68 @@ def reemplazar_cotizacion_en_linea(linea, nueva_cotizacion_str):
     linea_modificada = linea[:182] + nueva_cotizacion_str + linea[190:]
     return linea_modificada
 
-def calcular_cotizacion_expectativa_vida(imponible_seguro_cesantia, tope_imponible_afp, tiene_subsidio=False, renta_imponible_afp=0):
+def calcular_cotizacion_expectativa_vida(imponible_seguro_cesantia, tope_imponible_afp, tiene_subsidio=False, renta_imponible_afp=0, dias_subsidio=0):
     """
     Calcula la cotización expectativa de vida:
     - Sin subsidio: (imponibleSeguroCesantia * 0.009) redondeada
-    - Con subsidio: ((rentaImponibleAfp + imponibleSeguroCesantia) * 0.009) redondeada
-    
-    Si algún valor excede el tope imponible, se usa el tope en el cálculo.
+    - Con subsidio: Se proporciona el imponibleSeguroCesantia según días de subsidio,
+      luego se suma con rentaImponibleAfp, se aplica tope al total, y se calcula ((suma) * 0.009) redondeada
     
     Args:
         imponible_seguro_cesantia: Imponible seguro cesantía (entero)
         tope_imponible_afp: Tope imponible AFP del mes (entero)
         tiene_subsidio: True si el trabajador tiene subsidio
         renta_imponible_afp: Renta imponible AFP (entero), usado solo si tiene subsidio
+        dias_subsidio: Días de subsidio del trabajador (entero)
     
     Returns:
         Cotización expectativa de vida (entero redondeado)
     """
-    # Aplicar tope a los valores si los exceden
-    imponible_cesantia_efectivo = min(imponible_seguro_cesantia, tope_imponible_afp)
-    renta_afp_efectiva = min(renta_imponible_afp, tope_imponible_afp)
-    
-    if tiene_subsidio:
-        # Con subsidio: usar tanto rentaImponibleAfp como imponibleSeguroCesantia (con topes aplicados)
+    if tiene_subsidio and dias_subsidio > 0:
+        # Proporcionar el imponible seguro cesantía según días de subsidio (base mensual de 30 días)
+        imponible_cesantia_proporcional = round(imponible_seguro_cesantia * (dias_subsidio / 30))
+        
+        # Sumar renta AFP con imponible cesantía proporcional
+        suma_total = renta_imponible_afp + imponible_cesantia_proporcional
+        
+        # Aplicar tope al total de la suma
+        suma_efectiva = min(suma_total, tope_imponible_afp)
+        
+        # Calcular cotización sobre la suma efectiva
+        cotizacion = suma_efectiva * 0.009
+    elif tiene_subsidio:
+        # Con subsidio pero sin días específicos, usar lógica anterior
+        renta_afp_efectiva = min(renta_imponible_afp, tope_imponible_afp)
+        imponible_cesantia_efectivo = min(imponible_seguro_cesantia, tope_imponible_afp)
         cotizacion = (renta_afp_efectiva + imponible_cesantia_efectivo) * 0.009
     else:
         # Sin subsidio: solo imponibleSeguroCesantia (con tope aplicado)
+        imponible_cesantia_efectivo = min(imponible_seguro_cesantia, tope_imponible_afp)
         cotizacion = imponible_cesantia_efectivo * 0.009
     
     return round(cotizacion)
 
-def reemplazar_campo_740_imponible_cesantia(linea, imponible_cesantia_str, tiene_subsidio=False):
+def reemplazar_campo_740_imponible_cesantia(linea, imponible_cesantia_str, tiene_subsidio=False, duracion_subsidio=0):
     """
-    Reemplaza el campo 740 con el imponible cesantía solo si tiene subsidio.
+    Reemplaza el campo 740 con el imponible cesantía proporcional a los días de subsidio.
     
     Args:
         linea: Línea original
         imponible_cesantia_str: Imponible cesantía como string de 8 dígitos con ceros a la izquierda
         tiene_subsidio: True si el trabajador tiene subsidio
+        duracion_subsidio: Días de subsidio del trabajador (entero)
     
     Returns:
         Línea con el campo 740 reemplazado (solo si tiene subsidio)
     """
     if len(linea) < 748 or not tiene_subsidio:  # Solo modificar si tiene subsidio
         return linea
+    
+    # Si hay días de subsidio específicos, proporcionar el valor
+    if duracion_subsidio > 0:
+        imponible_cesantia_original = int(imponible_cesantia_str)
+        imponible_cesantia_proporcional = round(imponible_cesantia_original * (duracion_subsidio / 30))
+        imponible_cesantia_str = str(imponible_cesantia_proporcional).zfill(8)
     
     # Reemplazar posición 740, largo 8 (índices 740-747)
     linea_modificada = linea[:740] + imponible_cesantia_str + linea[748:]
@@ -383,6 +474,7 @@ def procesar_archivos(tope_imponible_afp):
     grupos = {}
     archivos_modificados = {}  # Para almacenar las líneas modificadas por archivo
     codificaciones_archivos = {}  # Para almacenar la codificación detectada de cada archivo
+    duraciones_subsidio_por_trabajador = {}  # Para sumar duraciones de subsidio por RUT
     
     for archivo in archivos:
         print(f"\nProcesando archivo: {archivo}")
@@ -437,6 +529,22 @@ def procesar_archivos(tope_imponible_afp):
                     # Verificar si tieneSubsidio (código 03 o 06)
                     tieneSubsidio = codigoMovimientoPersonal in ['03', '06']
                     
+                    # Extraer fechas de subsidio si aplica
+                    fechaDesde = None
+                    fechaHasta = None
+                    duracionSubsidio = 0
+                    
+                    if tieneSubsidio:
+                        # Extraer fechaDesde: posición 128, largo 10
+                        fechaDesde = extraer_fecha_subsidio(linea_original, 128)
+                        
+                        # Extraer fechaHasta: posición 138, largo 10
+                        fechaHasta = extraer_fecha_subsidio(linea_original, 138)
+                        
+                        # Calcular duración del subsidio
+                        if fechaDesde and fechaHasta:
+                            duracionSubsidio = calcular_duracion_dias(fechaDesde, fechaHasta)
+                    
                     # Extraer campos adicionales de la línea principal
                     rentaImponibleAfp = None
                     cotizacionAfp = None
@@ -484,7 +592,8 @@ def procesar_archivos(tope_imponible_afp):
                                 imponibleSeguroCesantia, 
                                 tope_imponible_afp,
                                 tiene_subsidio=tieneSubsidio, 
-                                renta_imponible_afp=rentaImponibleAfp
+                                renta_imponible_afp=rentaImponibleAfp,
+                                dias_subsidio=duracionSubsidio
                             )
                             cotizacionExpectativaVidaStr = convertir_a_string_8_ceros(cotizacionExpectativaVida)
                         else:
@@ -509,7 +618,7 @@ def procesar_archivos(tope_imponible_afp):
                         # 2. Reemplazar campo 740 con imponible cesantía (solo si tiene subsidio)
                         if imponibleSeguroCesantia > 0:
                             imponibleSeguroCesantiaStr = convertir_a_string_8_ceros(imponibleSeguroCesantia)
-                            linea_modificada = reemplazar_campo_740_imponible_cesantia(linea_modificada, imponibleSeguroCesantiaStr, tieneSubsidio)
+                            linea_modificada = reemplazar_campo_740_imponible_cesantia(linea_modificada, imponibleSeguroCesantiaStr, tieneSubsidio, duracionSubsidio)
                         
                         # 3. Reemplazar campo 748 con jornada según CSV
                         linea_modificada = reemplazar_campo_748_jornada(linea_modificada, jornada_string)
@@ -536,28 +645,43 @@ def procesar_archivos(tope_imponible_afp):
                         
                         # Mostrar cotización expectativa de vida con información de tope si aplica
                         if debe_calcular_cotizaciones:
-                            imponible_cesantia_efectivo = min(imponibleSeguroCesantia, tope_imponible_afp)
-                            
-                            if tieneSubsidio:
-                                # Verificar si se aplicaron topes
-                                tope_aplicado_afp = rentaImponibleAfp > tope_imponible_afp
-                                tope_aplicado_cesantia = imponibleSeguroCesantia > tope_imponible_afp
+                            if tieneSubsidio and duracionSubsidio > 0:
+                                # Para subsidios con días específicos, mostrar cálculo proporcional
+                                imponible_cesantia_proporcional = round(imponibleSeguroCesantia * (duracionSubsidio / 30))
+                                suma_total = rentaImponibleAfp + imponible_cesantia_proporcional
+                                suma_efectiva = min(suma_total, tope_imponible_afp)
                                 
-                                if tope_aplicado_afp or tope_aplicado_cesantia:
-                                    mensaje_tope = []
-                                    if tope_aplicado_afp:
-                                        mensaje_tope.append(f"AFP: {rentaImponibleAfp:,}→{renta_efectiva_afp:,}")
-                                    if tope_aplicado_cesantia:
-                                        mensaje_tope.append(f"Cesantía: {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}")
+                                if suma_total > tope_imponible_afp:
+                                    print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponible_cesantia_proporcional:,}) = {suma_total:,} → {suma_efectiva:,} (TOPE) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO {duracionSubsidio} días)")
+                                else:
+                                    print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponible_cesantia_proporcional:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO {duracionSubsidio} días)")
                                     
-                                    print(f"    Campo 756 (CotizExpVida): ({renta_efectiva_afp:,} + {imponible_cesantia_efectivo:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO) [TOPE: {', '.join(mensaje_tope)}]")
-                                else:
-                                    print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponibleSeguroCesantia:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO)")
+                                print(f"    Campo 740: {imponibleSeguroCesantia:,} → {imponible_cesantia_proporcional:,} (proporcional {duracionSubsidio}/30 días)")
                             else:
-                                if imponibleSeguroCesantia > tope_imponible_afp:
-                                    print(f"    Campo 756 (CotizExpVida): {imponible_cesantia_efectivo:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} [TOPE: Cesantía {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}]")
+                                # Lógica original para subsidios sin días específicos
+                                imponible_cesantia_efectivo = min(imponibleSeguroCesantia, tope_imponible_afp)
+                                
+                                if tieneSubsidio:
+                                    # Verificar si se aplicaron topes
+                                    tope_aplicado_afp = rentaImponibleAfp > tope_imponible_afp
+                                    tope_aplicado_cesantia = imponibleSeguroCesantia > tope_imponible_afp
+                                    
+                                    if tope_aplicado_afp or tope_aplicado_cesantia:
+                                        mensaje_tope = []
+                                        if tope_aplicado_afp:
+                                            renta_efectiva_afp = min(rentaImponibleAfp, tope_imponible_afp)
+                                            mensaje_tope.append(f"AFP: {rentaImponibleAfp:,}→{renta_efectiva_afp:,}")
+                                        if tope_aplicado_cesantia:
+                                            mensaje_tope.append(f"Cesantía: {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}")
+                                        
+                                        print(f"    Campo 756 (CotizExpVida): ({renta_efectiva_afp:,} + {imponible_cesantia_efectivo:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO) [TOPE: {', '.join(mensaje_tope)}]")
+                                    else:
+                                        print(f"    Campo 756 (CotizExpVida): ({rentaImponibleAfp:,} + {imponibleSeguroCesantia:,}) × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (CON SUBSIDIO)")
                                 else:
-                                    print(f"    Campo 756 (CotizExpVida): {imponibleSeguroCesantia:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr}")
+                                    if imponibleSeguroCesantia > tope_imponible_afp:
+                                        print(f"    Campo 756 (CotizExpVida): {imponible_cesantia_efectivo:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} [TOPE: Cesantía {imponibleSeguroCesantia:,}→{imponible_cesantia_efectivo:,}]")
+                                    else:
+                                        print(f"    Campo 756 (CotizExpVida): {imponibleSeguroCesantia:,} × 0.009 = {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr}")
                         else:
                             print(f"    Campo 756 (CotizExpVida): {cotizacionExpectativaVida:,} → {cotizacionExpectativaVidaStr} (SIN CAMBIOS)")
                     
@@ -568,6 +692,15 @@ def procesar_archivos(tope_imponible_afp):
                     # Si no existe el grupo, crearlo
                     if rutTrabajador not in grupos:
                         grupos[rutTrabajador] = []
+                    
+                    # Inicializar contador de duración de subsidio para este trabajador si no existe
+                    if rutFormateado not in duraciones_subsidio_por_trabajador:
+                        duraciones_subsidio_por_trabajador[rutFormateado] = 0
+                    
+                    # Sumar duración del subsidio si la línea tiene subsidio
+                    if tieneSubsidio and duracionSubsidio > 0:
+                        duraciones_subsidio_por_trabajador[rutFormateado] += duracionSubsidio
+                        print(f"    📅 Subsidio: {fechaDesde} a {fechaHasta} = {duracionSubsidio} días (Total acumulado: {duraciones_subsidio_por_trabajador[rutFormateado]} días)")
                     
                     # Agregar la fila completa al grupo
                     grupos[rutTrabajador].append({
@@ -582,6 +715,10 @@ def procesar_archivos(tope_imponible_afp):
                         'tipoTrabajador': tipoTrabajador,
                         'debe_calcular_cotizaciones': debe_calcular_cotizaciones if esLineaPrincipal else False,
                         'tieneSubsidio': tieneSubsidio,
+                        'fechaDesde': fechaDesde,
+                        'fechaHasta': fechaHasta,
+                        'duracionSubsidio': duracionSubsidio,
+                        'duracionTotalSubsidio': duraciones_subsidio_por_trabajador.get(rutFormateado, 0),
                         'indicadorLineaPrincipal': indicadorLineaPrincipal,
                         'esLineaPrincipal': esLineaPrincipal,
                         'rentaImponibleAfp': rentaImponibleAfp,
@@ -610,6 +747,14 @@ def procesar_archivos(tope_imponible_afp):
             for linea in lineas:
                 f.write(linea + '\n')
         print(f"Archivo guardado: {ruta_salida}")
+    
+    # Mostrar resumen de duraciones de subsidio
+    if duraciones_subsidio_por_trabajador:
+        print(f"\n=== RESUMEN DE DURACIONES DE SUBSIDIO ===")
+        for rut, total_dias in duraciones_subsidio_por_trabajador.items():
+            if total_dias > 0:
+                print(f"RUT {rut}: {total_dias} días totales de subsidio")
+        print(f"Total trabajadores con subsidio: {len([d for d in duraciones_subsidio_por_trabajador.values() if d > 0])}")
     
     return grupos, archivos_modificados
 
